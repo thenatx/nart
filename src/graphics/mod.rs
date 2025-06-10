@@ -97,13 +97,13 @@ impl Color {
     }
 }
 
-impl Into<wgpu::Color> for Color {
-    fn into(self) -> wgpu::Color {
+impl From<Color> for wgpu::Color {
+    fn from(val: Color) -> Self {
         let [r, g, b, a] = [
-            self.r as f64 / 255.0,
-            self.g as f64 / 255.0,
-            self.b as f64 / 255.0,
-            self.a as f64 / 255.0,
+            val.r as f64 / 255.0,
+            val.g as f64 / 255.0,
+            val.b as f64 / 255.0,
+            val.a as f64 / 255.0,
         ];
 
         wgpu::Color { r, g, b, a }

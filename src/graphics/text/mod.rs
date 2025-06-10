@@ -90,7 +90,7 @@ impl TextRenderer {
     }
 
     fn fill_cache(&mut self) {
-        if !self.cache.is_empty() && self.text.len() <= 0 {
+        if !self.cache.is_empty() || self.text.is_empty() {
             return;
         }
 
@@ -175,7 +175,7 @@ impl TextRenderer {
             .write(device, queue, self.cache.as_slice());
         self.atlas_bind_group =
             self.atlas
-                .generate_bind_group(&self.atlas_bind_group_layout, &queue, &device);
+                .generate_bind_group(&self.atlas_bind_group_layout, queue, device);
     }
 
     pub fn resize(&mut self, width: u32, height: u32, device: &Device, queue: &Queue) {
@@ -220,8 +220,7 @@ impl TextRenderer {
             self.atlas.image.height() as f32,
         );
 
-        let glyph_to_render = GlyphToRender::new(x, y, w, h, atlas_glyph, atlas_size);
-        glyph_to_render
+        GlyphToRender::new(x, y, w, h, atlas_glyph, atlas_size)
     }
 }
 

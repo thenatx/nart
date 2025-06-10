@@ -49,10 +49,10 @@ impl<T: Pod + Zeroable> GpuBuffer<T> {
         let required_capacity = data.len();
 
         if required_capacity > self.capacity {
-            self.resize(device, (self.capacity as usize + required_capacity) * 3 / 2);
+            self.resize(device, (self.capacity + required_capacity) * 3 / 2);
         }
 
-        self.capacity = self.capacity - required_capacity;
+        self.capacity -= required_capacity;
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(data));
     }
 

@@ -50,7 +50,7 @@ impl ApplicationHandler for Nart {
             WindowEvent::RedrawRequested => {
                 let mut content = self.terminal.read_content();
 
-                if content.len() > 0 {
+                if !content.is_empty() {
                     self.content.append(&mut content);
                     let text = String::from_utf8_lossy(self.content.as_slice());
                     renderer.write_glyphs(&text);
@@ -59,17 +59,17 @@ impl ApplicationHandler for Nart {
                 renderer.init_draw();
             }
             WindowEvent::Resized(size) => renderer.resize(size),
-            WindowEvent::KeyboardInput { event, .. } => match event {
-                KeyEvent {
-                    text: Some(text),
-                    state: ElementState::Pressed,
-                    ..
-                } => {
-                    self.terminal.write_content(text.as_str());
-                    std::thread::sleep(std::time::Duration::from_millis(200));
-                }
-                _ => {}
-            },
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        text: Some(text),
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => {
+                self.terminal.write_content(text.as_str());
+            }
             _ => {}
         }
     }
@@ -80,6 +80,6 @@ pub fn init_window() {
     let mut app = Nart::new();
 
     if let Err(e) = event_loop.run_app(&mut app) {
-        error!("Failed to run event loop: {}", e);
+        error!("Failed to run event loop: {e}");
     };
 }

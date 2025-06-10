@@ -19,7 +19,7 @@ impl TerminalState {
     pub fn write_content(&mut self, buf: &str) {
         match unistd::write(&self.pty.master, buf.as_bytes()) {
             Ok(_) => (),
-            Err(e) => log::error!("Error writting to the master: {}", e),
+            Err(e) => log::error!("Error writting to the master: {e}"),
         }
     }
 
@@ -30,7 +30,7 @@ impl TerminalState {
             Err(e) => {
                 match e {
                     Errno::EAGAIN | Errno::EIO => (),
-                    e => log::error!("Error while reading the master: {}", e),
+                    e => log::error!("Error while reading the master: {e}"),
                 }
                 Vec::new()
             }
