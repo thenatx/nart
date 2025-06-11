@@ -1,9 +1,9 @@
 pub mod atlas;
 
-use std::collections::HashMap;
-
 use bytemuck::{Pod, Zeroable};
-use cosmic_text::{FontSystem, SwashCache};
+use cosmic_text::{Buffer, CacheKey, FontSystem, LayoutGlyph, SwashCache};
+use image::DynamicImage;
+use log::debug;
 use wgpu::{
     include_wgsl, BindGroup, BindGroupLayout, BlendState, ColorWrites, Device, Queue, RenderPass,
     RenderPipeline, SurfaceConfiguration, VertexAttribute,
@@ -17,7 +17,6 @@ pub struct TextRenderer {
     pub atlas: GlyphAtlas,
     pub glyph_buffer: VertexBuffer<GlyphToRender>,
     pub cache: Vec<GlyphToRender>,
-    placement_cache: HashMap<u16, cosmic_text::Placement>,
     font_system: FontSystem,
     swash_cache: SwashCache,
     attributes: cosmic_text::Attrs<'static>,
@@ -38,9 +37,9 @@ impl TextRenderer {
     ) -> Self {
         let mut font_system = FontSystem::new();
         let swash_cache = SwashCache::new();
-        let buffer = cosmic_text::Buffer::new(&mut font_system, metrics);
-        let atlas = GlyphAtlas::new(2048, device);
+        let buffer = Buffer::new(&mut font_system, metrics);
 
+        let atlas = GlyphAtlas::new(2048, device);
         let glyph_buffer = VertexBuffer::new(device, "Glyph vertex buffer", None);
 
         let shader_module =
@@ -54,6 +53,7 @@ impl TextRenderer {
             bind_group_layouts: &[&atlas_bind_group_layout],
             push_constant_ranges: &[],
         });
+
         let render_pipeline = PipelineBuilder::new(device, "Main render pipeline")
             .with_shader(&shader_module)
             .add_color_target(
@@ -84,7 +84,6 @@ impl TextRenderer {
             surface_size,
             cache: Vec::new(),
             text: String::new(),
-            placement_cache: HashMap::new(),
             attributes: cosmic_text::Attrs::new(),
         }
     }
@@ -94,92 +93,113 @@ impl TextRenderer {
             return;
         }
 
-        let mut glyphs_to_render = Vec::with_capacity(self.text.len());
-        let mut glyphs = Vec::new();
+        if !self.buffer.redraw() {
+            return;
+        }
+
+        let mut new_cache = Vec::with_capacity(self.text.len());
 
         for line in self.buffer.layout_runs() {
             for glyph in line.glyphs {
-                let glyph_id = glyph.glyph_id;
-                let font_id = glyph.font_id;
                 let pos = (glyph.x, glyph.y);
-                let cache_key = cosmic_text::CacheKey::new(
-                    font_id,
-                    glyph_id,
+                let cache_key = CacheKey::new(
+                    glyph.font_id,
+                    glyph.glyph_id,
                     glyph.font_size,
                     pos,
                     glyph.cache_key_flags,
                 );
 
-                let atlas_id = GlyphRectId::new(glyph_id, cache_key.0);
-                let placement = if !self.placement_cache.contains_key(&glyph_id) {
-                    let glyph_img = self
-                        .swash_cache
-                        .get_image_uncached(&mut self.font_system, cache_key.0)
-                        .unwrap();
+                let glyph_img = self
+                    .swash_cache
+                    .get_image_uncached(&mut self.font_system, cache_key.0)
+                    .expect("Failed to get glyph image - font not found");
 
-                    let placement = glyph_img.placement;
+                let placement = glyph_img.placement;
+                let glyph_placement = self.calculate_glyph_position(glyph, &line, placement);
+                let atlas_id = self.create_atlas_id(cache_key.0);
 
-                    self.placement_cache.insert(glyph_id, placement);
-                    glyphs.push((atlas_id, Glyph::get_atlas_image(glyph_img)));
-
-                    placement
-                } else {
-                    *self.placement_cache.get(&glyph_id).unwrap()
-                };
-
-                let (width, height) = (placement.width, placement.height);
-                let pos = (glyph.x.round(), line.line_y.round() + glyph.y);
-                let glyph_placement = (
-                    pos.0,
-                    pos.1 - placement.top as f32,
-                    width as f32,
-                    height as f32,
-                );
-
-                let glyph_to_render = (glyph_placement, atlas_id);
-                glyphs_to_render.push(glyph_to_render);
+                new_cache.push((glyph_placement, atlas_id));
             }
         }
 
-        if !glyphs.is_empty() {
-            self.atlas.add_glyphs(glyphs.as_slice());
-        }
-
-        let new_cache = glyphs_to_render
+        self.cache = new_cache
             .iter()
-            .map(|(placement, atlas_id)| {
-                let atlas_glyph = self.atlas.get_glyph(&atlas_id.glyph_id).unwrap();
-                self.create_glyph_to_render(*placement, atlas_glyph)
+            .filter_map(|(placement, atlas_id)| {
+                self.atlas
+                    .get_glyph(&atlas_id.glyph_id)
+                    .map(|atlas_glyph| self.create_glyph_to_render(*placement, atlas_glyph))
             })
             .collect();
-
-        self.cache = new_cache;
     }
 
-    pub fn set_text(&mut self, device: &Device, queue: &Queue, text: String) {
-        if self.text == text {
-            return;
-        }
-
-        self.text = text;
+    fn set_text(&mut self) {
         self.buffer.set_text(
             &mut self.font_system,
             &self.text,
             &self.attributes,
-            cosmic_text::Shaping::Basic,
+            cosmic_text::Shaping::Advanced,
         );
+    }
+
+    pub fn add_text(&mut self, device: &Device, queue: &Queue, text: &str) {
+        if text.is_empty() {
+            return;
+        }
+
+        self.text.push_str(text);
+
+        let timer = std::time::Instant::now();
+        self.set_text();
+        debug!("Shape {} glyphs in {:?}", text.len(), timer.elapsed());
+
+        let runs = self.buffer.layout_runs().collect::<Vec<_>>();
+        let new_glyphs = Self::process_glyphs(
+            runs.as_slice(),
+            &mut self.font_system,
+            &mut self.swash_cache,
+        );
+
+        if !new_glyphs.is_empty() {
+            self.atlas.add_glyphs(new_glyphs.as_slice());
+        }
 
         self.cache.clear();
         self.fill_cache();
-        self.glyph_buffer
-            .write(device, queue, self.cache.as_slice());
+
+        self.glyph_buffer.write(device, queue, &self.cache);
         self.atlas_bind_group =
             self.atlas
                 .generate_bind_group(&self.atlas_bind_group_layout, queue, device);
     }
 
+    fn process_glyphs(
+        runs: &[cosmic_text::LayoutRun],
+        font_system: &mut FontSystem,
+        swash_cache: &mut SwashCache,
+    ) -> Vec<(GlyphRectId, DynamicImage)> {
+        runs.iter()
+            .flat_map(|line| line.glyphs.iter())
+            .filter_map(|glyph| {
+                let pos = (glyph.x, glyph.y);
+                let cache_key = cosmic_text::CacheKey::new(
+                    glyph.font_id,
+                    glyph.glyph_id,
+                    glyph.font_size,
+                    pos,
+                    glyph.cache_key_flags,
+                );
+                let id = GlyphRectId::new(glyph.glyph_id, cache_key.0);
+                swash_cache
+                    .get_image_uncached(font_system, cache_key.0)
+                    .map(|img| (id, Glyph::get_atlas_image(img)))
+            })
+            .collect()
+    }
+
     pub fn resize(&mut self, width: u32, height: u32, device: &Device, queue: &Queue) {
         self.surface_size = (width, height);
+
         self.buffer.set_size(
             &mut self.font_system,
             Some(width as f32),
@@ -196,6 +216,24 @@ impl TextRenderer {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, self.glyph_buffer.raw_buffer().slice(..));
         render_pass.set_bind_group(0, &self.atlas_bind_group, &[]);
+    }
+
+    fn calculate_glyph_position(
+        &self,
+        glyph: &LayoutGlyph,
+        line: &cosmic_text::LayoutRun,
+        placement: cosmic_text::Placement,
+    ) -> (f32, f32, f32, f32) {
+        let x = glyph.x.round();
+        let y = line.line_y.round() + glyph.y;
+        let width = placement.width as f32;
+        let height = placement.height as f32;
+
+        (x, y - placement.top as f32, width, height)
+    }
+
+    fn create_atlas_id(&self, glyph_cache_key: cosmic_text::CacheKey) -> GlyphRectId {
+        GlyphRectId::new(glyph_cache_key.glyph_id, glyph_cache_key)
     }
 
     fn create_glyph_to_render(
@@ -244,6 +282,7 @@ impl GlyphToRender {
             w_uv / atlas_width,
             h_uv / atlas_height,
         ];
+
         let format = match glyph.format {
             atlas::GlyphImageFormat::GrayScale => 0.0,
             atlas::GlyphImageFormat::Color => 1.0,

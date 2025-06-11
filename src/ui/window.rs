@@ -51,9 +51,10 @@ impl ApplicationHandler for Nart {
                 let mut content = self.terminal.read_content();
 
                 if !content.is_empty() {
-                    self.content.append(&mut content);
-                    let text = String::from_utf8_lossy(self.content.as_slice());
+                    let text = String::from_utf8_lossy(&content);
                     renderer.write_glyphs(&text);
+
+                    self.content.append(&mut content);
                 }
 
                 renderer.init_draw();

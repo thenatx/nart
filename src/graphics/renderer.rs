@@ -84,11 +84,8 @@ impl Renderer {
     }
 
     pub fn write_glyphs(&mut self, text: &str) {
-        self.text_renderer.set_text(
-            &self.wgpu_context.device,
-            &self.wgpu_context.queue,
-            text.to_string(),
-        );
+        self.text_renderer
+            .add_text(&self.wgpu_context.device, &self.wgpu_context.queue, text);
 
         self.instance_num = self.text_renderer.cache.len() as u32;
     }
