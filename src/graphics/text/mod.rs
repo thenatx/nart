@@ -84,7 +84,7 @@ impl TextRenderer {
             surface_size,
             cache: Vec::new(),
             text: String::new(),
-            attributes: cosmic_text::Attrs::new(),
+            attributes: cosmic_text::Attrs::new().family(cosmic_text::Family::Monospace),
         }
     }
 
@@ -134,9 +134,11 @@ impl TextRenderer {
     }
 
     fn set_text(&mut self) {
+        // TODO: Improve performance here, tooks about 1s when much glyphs changed
+        // though when use a monospace font this performs better
         self.buffer.set_text(
             &mut self.font_system,
-            &self.text,
+            self.text.as_str(),
             &self.attributes,
             cosmic_text::Shaping::Advanced,
         );
