@@ -15,5 +15,6 @@ log = "0.4.27"
 nix = { version = "0.30.1", features = ["signal", "fs", "term"] }
 pollster = "0.4.0"
 rectangle-pack = "0.4.2"
+vte = "0.15.0"
 wgpu = "25.0.2"
 winit = { version = "0.30.11", features = ["rwh_06"] }
