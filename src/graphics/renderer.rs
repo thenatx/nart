@@ -1,4 +1,4 @@
-use super::WgpuContext;
+use super::{text::cursor::CursorRenderer, WgpuContext};
 use std::sync::Arc;
 use wgpu::{LoadOp, RenderPassColorAttachment, TextureUsages, TextureViewDescriptor};
 use winit::{dpi::PhysicalSize, window::Window};
@@ -7,55 +7,57 @@ use super::text::TextRenderer;
 
 pub struct Renderer {
     window: Arc<Window>,
-    wgpu_context: WgpuContext<'static>,
+    context: WgpuContext<'static>,
     text_renderer: TextRenderer,
+    cursor_renderer: CursorRenderer,
     size: PhysicalSize<u32>,
-    instance_num: u32,
 }
 
 impl Renderer {
     pub fn new(window: Window) -> Self {
         let window = Arc::new(window);
         let window_size = window.inner_size();
-        let wgpu_context = WgpuContext::new(&window, window_size.width, window_size.height);
+        let context = WgpuContext::new(&window, window_size.width, window_size.height);
         let metrics = cosmic_text::Metrics::new(16.0, 12.0);
+
+        let cursor_renderer = CursorRenderer::new(&context.device, &context.surf_config);
         let mut text_renderer = TextRenderer::new_with_metrics(
-            &wgpu_context.device,
-            &wgpu_context.queue,
-            &wgpu_context.surf_config,
+            &context.device,
+            &context.queue,
+            &context.surf_config,
             metrics,
         );
 
         text_renderer.resize(
             window_size.width,
             window_size.height,
-            &wgpu_context.device,
-            &wgpu_context.queue,
+            &context.device,
+            &context.queue,
         );
 
         Self {
             window,
-            wgpu_context,
+            context,
             text_renderer,
+            cursor_renderer,
             size: window_size,
-            instance_num: 0,
         }
     }
 
     pub fn init_draw(&mut self) {
         let background_color = super::Color::new(0, 0, 0, 255);
         let mut command_encoder =
-            self.wgpu_context
+            self.context
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Main command encoder"),
                 });
 
-        let surface_texture = self.wgpu_context.surface.get_current_texture().unwrap();
+        let surface_texture = self.context.surface.get_current_texture().unwrap();
         let surface_view = surface_texture.texture.create_view(&TextureViewDescriptor {
             label: Some("Window surface texture view"),
             dimension: Some(wgpu::TextureViewDimension::D2),
-            format: Some(self.wgpu_context.surf_config.format),
+            format: Some(self.context.surf_config.format),
             usage: Some(TextureUsages::RENDER_ATTACHMENT),
             ..Default::default()
         });
@@ -74,10 +76,10 @@ impl Renderer {
         });
 
         self.text_renderer.draw(&mut render_pass);
-        render_pass.draw(0..6, 0..self.instance_num);
+        self.cursor_renderer.draw(&mut render_pass);
 
         drop(render_pass);
-        self.wgpu_context.queue.submit([command_encoder.finish()]);
+        self.context.queue.submit([command_encoder.finish()]);
 
         surface_texture.present();
         self.window.request_redraw();
@@ -85,9 +87,17 @@ impl Renderer {
 
     pub fn write_glyphs(&mut self, text: &str) {
         self.text_renderer
-            .add_text(&self.wgpu_context.device, &self.wgpu_context.queue, text);
+            .add_text(&self.context.device, &self.context.queue, text);
+    }
 
-        self.instance_num = self.text_renderer.cache.len() as u32;
+    pub fn update_cursor(&mut self, x: u32, y: u32, size: (u32, u32)) {
+        let (width, height) = size;
+        self.cursor_renderer.update_cursor(
+            &self.context.device,
+            &self.context.queue,
+            (x, y),
+            (width, height),
+        );
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
@@ -96,14 +106,19 @@ impl Renderer {
         }
 
         self.size = new_size;
-        self.wgpu_context
-            .surface_resize(new_size.width, new_size.height);
+        self.context.surface_resize(new_size.width, new_size.height);
 
         self.text_renderer.resize(
             self.size.width,
             self.size.height,
-            &self.wgpu_context.device,
-            &self.wgpu_context.queue,
+            &self.context.device,
+            &self.context.queue,
+        );
+
+        self.cursor_renderer.resize(
+            &self.context.device,
+            &self.context.queue,
+            (self.size.width, self.size.height),
         );
 
         self.init_draw();

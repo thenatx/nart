@@ -51,15 +51,26 @@ impl ApplicationHandler for Nart {
                 let mut content = self.terminal.read_content();
 
                 if !content.is_empty() {
-                    let text = String::from_utf8_lossy(&content);
-                    renderer.write_glyphs(&text);
+                    self.terminal.grid.update(content.as_slice());
+                    let cursor_pos = self.terminal.grid.get_cursor();
+
+                    renderer.write_glyphs(&self.terminal.grid.get_content());
+                    renderer.update_cursor(
+                        cursor_pos.0,
+                        cursor_pos.1,
+                        self.terminal.grid.cell_size,
+                    );
 
                     self.content.append(&mut content);
                 }
 
                 renderer.init_draw();
             }
-            WindowEvent::Resized(size) => renderer.resize(size),
+            WindowEvent::Resized(size) => {
+                self.terminal
+                    .resize_grid((size.width, size.height), (10, 20));
+                renderer.resize(size)
+            }
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {

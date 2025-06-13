@@ -10,8 +10,6 @@ struct VertexOutput {
     @location(1) format: u32,
 };
 
-@group(1) @binding(0) var<uniform> screen_size: vec2<f32>;
-
 @vertex
 fn vs_main(
     @builtin(vertex_index) vert_idx: u32,

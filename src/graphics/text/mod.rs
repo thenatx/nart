@@ -1,4 +1,5 @@
 pub mod atlas;
+pub mod cursor;
 
 use bytemuck::{Pod, Zeroable};
 use cosmic_text::{Buffer, CacheKey, FontSystem, LayoutGlyph, SwashCache};
@@ -14,13 +15,13 @@ use atlas::{Glyph, GlyphAtlas, GlyphRectId};
 use super::{buffer::VertexBuffer, pipeline::PipelineBuilder};
 
 pub struct TextRenderer {
-    pub atlas: GlyphAtlas,
-    pub glyph_buffer: VertexBuffer<GlyphToRender>,
-    pub cache: Vec<GlyphToRender>,
+    buffer: cosmic_text::Buffer,
     font_system: FontSystem,
+    atlas: GlyphAtlas,
+    glyph_buffer: VertexBuffer<GlyphToRender>,
+    cache: Vec<GlyphToRender>,
     swash_cache: SwashCache,
     attributes: cosmic_text::Attrs<'static>,
-    buffer: cosmic_text::Buffer,
     text: String,
     pipeline: RenderPipeline,
     atlas_bind_group_layout: BindGroupLayout,
@@ -88,6 +89,7 @@ impl TextRenderer {
         }
     }
 
+    // TODO: Improve glyph positioning
     fn fill_cache(&mut self) {
         if !self.cache.is_empty() || self.text.is_empty() {
             return;
@@ -134,8 +136,8 @@ impl TextRenderer {
     }
 
     fn set_text(&mut self) {
-        // TODO: Improve performance here, tooks about 1s when much glyphs changed
-        // though when use a monospace font this performs better
+        // TODO: Improve performance here. It takes about a second or more depending on the number of glyphs.
+        // However, using a monospaced font works better.
         self.buffer.set_text(
             &mut self.font_system,
             self.text.as_str(),
@@ -149,7 +151,7 @@ impl TextRenderer {
             return;
         }
 
-        self.text.push_str(text);
+        self.text = text.to_string();
 
         let timer = std::time::Instant::now();
         self.set_text();
@@ -218,6 +220,7 @@ impl TextRenderer {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_vertex_buffer(0, self.glyph_buffer.raw_buffer().slice(..));
         render_pass.set_bind_group(0, &self.atlas_bind_group, &[]);
+        render_pass.draw(0..6, 0..self.cache.len() as u32);
     }
 
     fn calculate_glyph_position(
