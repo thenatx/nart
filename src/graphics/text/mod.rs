@@ -223,6 +223,23 @@ impl TextRenderer {
         render_pass.draw(0..6, 0..self.cache.len() as u32);
     }
 
+    pub fn get_glyph_size(&mut self) -> Option<(f32, f32)> {
+        let width = if let Some(width) = self.buffer.monospace_width() {
+            width
+        } else {
+            let width = self.buffer.metrics().font_size;
+            self.buffer
+                .set_monospace_width(&mut self.font_system, Some(width));
+            width
+        };
+
+        if let Some(run) = self.buffer.layout_runs().last() {
+            return Some((width, run.line_height));
+        };
+
+        None
+    }
+
     fn calculate_glyph_position(
         &self,
         glyph: &LayoutGlyph,
@@ -234,7 +251,14 @@ impl TextRenderer {
         let width = placement.width as f32;
         let height = placement.height as f32;
 
-        (x, y - placement.top as f32, width, height)
+        let x_offset = self.buffer.monospace_width().unwrap() - width;
+
+        (
+            x_offset + x + placement.left as f32,
+            y - placement.top as f32,
+            width,
+            height,
+        )
     }
 
     fn create_atlas_id(&self, glyph_cache_key: cosmic_text::CacheKey) -> GlyphRectId {

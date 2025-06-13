@@ -5,6 +5,10 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 use super::text::TextRenderer;
 
+const FONT_SIZE: f32 = 16.0;
+const FONT_WIDTH: f32 = FONT_SIZE * 0.6;
+const LINE_HEIGHT: f32 = FONT_SIZE * 1.2;
+
 pub struct Renderer {
     window: Arc<Window>,
     context: WgpuContext<'static>,
@@ -18,7 +22,10 @@ impl Renderer {
         let window = Arc::new(window);
         let window_size = window.inner_size();
         let context = WgpuContext::new(&window, window_size.width, window_size.height);
-        let metrics = cosmic_text::Metrics::new(16.0, 12.0);
+
+        let scale_factor = window.scale_factor() as f32;
+        let metrics =
+            cosmic_text::Metrics::new(FONT_SIZE / scale_factor, LINE_HEIGHT / scale_factor);
 
         let cursor_renderer = CursorRenderer::new(&context.device, &context.surf_config);
         let mut text_renderer = TextRenderer::new_with_metrics(
@@ -90,7 +97,15 @@ impl Renderer {
             .add_text(&self.context.device, &self.context.queue, text);
     }
 
-    pub fn update_cursor(&mut self, x: u32, y: u32, size: (u32, u32)) {
+    pub fn get_cell_size(&mut self) -> (f32, f32) {
+        if let Some(size) = self.text_renderer.get_glyph_size() {
+            return size;
+        }
+
+        return (FONT_WIDTH, LINE_HEIGHT);
+    }
+
+    pub fn update_cursor(&mut self, x: f32, y: f32, size: (f32, f32)) {
         let (width, height) = size;
         self.cursor_renderer.update_cursor(
             &self.context.device,

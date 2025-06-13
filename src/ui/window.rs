@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, info};
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, WindowEvent},
@@ -54,6 +54,7 @@ impl ApplicationHandler for Nart {
                     self.terminal.grid.update(content.as_slice());
                     let cursor_pos = self.terminal.grid.get_cursor();
 
+                    info!("Cursor is at {:?} at the moment of draw call", cursor_pos);
                     renderer.write_glyphs(&self.terminal.grid.get_content());
                     renderer.update_cursor(
                         cursor_pos.0,
@@ -68,7 +69,7 @@ impl ApplicationHandler for Nart {
             }
             WindowEvent::Resized(size) => {
                 self.terminal
-                    .resize_grid((size.width, size.height), (10, 20));
+                    .resize_grid((size.width, size.height), renderer.get_cell_size());
                 renderer.resize(size)
             }
             WindowEvent::KeyboardInput {

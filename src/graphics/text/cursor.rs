@@ -9,8 +9,8 @@ use crate::graphics::{buffer::VertexBuffer, pipeline::PipelineBuilder};
 pub struct CursorRenderer {
     pipeline: RenderPipeline,
     buffer: VertexBuffer<Cursor>,
-    position: (u32, u32),
-    size: (u32, u32),
+    position: (f32, f32),
+    size: (f32, f32),
     surface_size: (f32, f32),
 }
 
@@ -45,8 +45,8 @@ impl CursorRenderer {
         Self {
             pipeline,
             buffer,
-            position: (0, 0),
-            size: (0, 0),
+            position: (0.0, 0.0),
+            size: (0.0, 0.0),
             surface_size,
         }
     }
@@ -55,8 +55,8 @@ impl CursorRenderer {
         &mut self,
         device: &Device,
         queue: &Queue,
-        pos: (u32, u32),
-        size: (u32, u32),
+        pos: (f32, f32),
+        size: (f32, f32),
     ) {
         let new_cursor = Cursor::from_pixel(pos, size, self.surface_size);
         self.buffer.write(device, queue, &[new_cursor]);
@@ -86,12 +86,12 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    fn from_pixel(position: (u32, u32), size: (u32, u32), surface_size: (f32, f32)) -> Self {
+    fn from_pixel(position: (f32, f32), size: (f32, f32), surface_size: (f32, f32)) -> Self {
         let [x, y, w, h] = [
-            position.0 as f32 / surface_size.0 * 2.0 - 1.0,
-            1.0 - position.1 as f32 / surface_size.1 * 2.0,
-            size.0 as f32 / surface_size.0 * 2.0,
-            size.1 as f32 / surface_size.1 * 2.0,
+            position.0 / surface_size.0 * 2.0 - 1.0,
+            1.0 - position.1 / surface_size.1 * 2.0,
+            size.0 / surface_size.0 * 2.0,
+            size.1 / surface_size.1 * 2.0,
         ];
 
         Self {
