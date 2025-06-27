@@ -160,10 +160,7 @@ impl TextRenderer {
 
         self.text = text.to_string();
 
-        let timer = std::time::Instant::now();
         self.set_text();
-        debug!("Shape {} glyphs in {:?}", text.len(), timer.elapsed());
-
         let runs = self.buffer.layout_runs().collect::<Vec<_>>();
         let new_glyphs = Self::process_glyphs(
             runs.as_slice(),

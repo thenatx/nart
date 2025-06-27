@@ -1,5 +1,4 @@
 use bytemuck::{Pod, Zeroable};
-use log::debug;
 use std::marker::PhantomData;
 use wgpu::{util::DeviceExt, Buffer, BufferDescriptor, BufferUsages, Device, Queue};
 
@@ -70,10 +69,6 @@ impl<T: Pod + Zeroable> GpuBuffer<T> {
 
         self.buffer = new_buffer;
         self.capacity = new_capacity;
-        debug!(
-            "Buffer with label '{}' resized to {} bytes",
-            self.label, new_size
-        );
     }
 
     pub fn inner(&self) -> &Buffer {
