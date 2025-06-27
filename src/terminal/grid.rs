@@ -35,13 +35,10 @@ impl TerminalGrid {
             .flat_map(|c| c.iter().map(|c| c.content))
             .collect();
 
-        info!("Terminal content: [ {} ]", content);
-
         content
     }
 
     pub fn get_cursor(&self) -> (f32, f32) {
-        info!("Cursor is at: {:?}", self.cursor);
         self.cursor
             .get_pixel_coords(self.cell_size.0, self.cell_size.1)
     }
@@ -54,13 +51,6 @@ impl TerminalGrid {
     pub fn resize(&mut self, width: u32, height: u32) {
         self.width = width;
         self.height = height;
-
-        info!(
-            "window size={:?}, cell size={:?}",
-            (width, height),
-            self.cell_size
-        );
-
         let (columns, rows) = (
             self.width as f32 / self.cell_size.0,
             self.height as f32 / self.cell_size.1,
@@ -168,12 +158,10 @@ impl vte::Perform for TerminalGrid {
             _ => (),
         };
 
-        log::info!(
-            "Params={:?}  Action={:?} intermediates={:?}",
-            params,
-            action,
-            intermediates
-        )
+        info!(
+            "Params={:?}, Action={:?}, intermediates={:?}",
+            params, action, intermediates
+        );
     }
 
     fn execute(&mut self, byte: u8) {
