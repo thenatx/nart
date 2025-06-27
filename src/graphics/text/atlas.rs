@@ -58,23 +58,19 @@ impl Glyph {
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GlyphRectId {
-    pub glyph_id: u16,
-    cache_key: cosmic_text::CacheKey,
+    pub cache_key: cosmic_text::CacheKey,
 }
 
 impl GlyphRectId {
-    pub fn new(glyph_id: u16, cache_key: cosmic_text::CacheKey) -> Self {
-        Self {
-            glyph_id,
-            cache_key,
-        }
+    pub fn new(cache_key: cosmic_text::CacheKey) -> Self {
+        Self { cache_key }
     }
 }
 
 #[derive(Debug)]
 pub struct GlyphAtlas {
     pub image: RgbaImage,
-    pub glyphs: HashMap<u16, Glyph>,
+    pub glyphs: HashMap<cosmic_text::CacheKey, Glyph>,
     sampler: wgpu::Sampler,
     texture: wgpu::Texture,
     targets: BTreeMap<u8, TargetBin>,
@@ -123,7 +119,7 @@ impl GlyphAtlas {
     pub fn add_glyphs(&mut self, glyphs: &[(GlyphRectId, DynamicImage)]) {
         let new_glyphs: Vec<_> = glyphs
             .iter()
-            .filter(|(rect_id, _)| !self.glyphs.contains_key(&rect_id.glyph_id))
+            .filter(|(rect_id, _)| !self.glyphs.contains_key(&rect_id.cache_key))
             .collect();
 
         if new_glyphs.is_empty() {
@@ -150,13 +146,15 @@ impl GlyphAtlas {
             );
         }
 
+        // FIXME: Should create another target and texture when out of space
+        // maybe other option is expand the atlas dimensions and create another atlas on backup if is too big?
         let packing_result = rectangle_pack::pack_rects(
             &rects_to_place,
             &mut self.targets,
             &rectangle_pack::volume_heuristic,
             &rectangle_pack::contains_smallest_box,
         )
-        .expect("Failed to pack glyphs into atlas");
+        .unwrap();
 
         let id_to_index: HashMap<_, _> = glyphs_with_rgba
             .iter()
@@ -165,10 +163,6 @@ impl GlyphAtlas {
             .collect();
 
         for (rect_id, (_, location)) in packing_result.packed_locations() {
-            if self.glyphs.contains_key(&rect_id.glyph_id) {
-                continue;
-            }
-
             let (_, img, format) = &glyphs_with_rgba[*id_to_index.get(rect_id).unwrap()];
             let (x, y) = (location.x(), location.y());
 
@@ -189,13 +183,13 @@ impl GlyphAtlas {
             }
 
             self.glyphs.insert(
-                rect_id.glyph_id,
+                rect_id.cache_key,
                 Glyph::new(x, y, location.width() - 2, location.height() - 2, *format),
             );
         }
     }
 
-    pub fn get_glyph(&self, id: &u16) -> Option<&Glyph> {
+    pub fn get_glyph(&self, id: &cosmic_text::CacheKey) -> Option<&Glyph> {
         self.glyphs.get(id)
     }
 

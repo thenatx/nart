@@ -73,6 +73,13 @@ impl TextRenderer {
         let atlas_bind_group = atlas.generate_bind_group(&atlas_bind_group_layout, queue, device);
         let surface_size = (surface.width, surface.height);
 
+        let mut features = cosmic_text::FontFeatures::new();
+        features.enable(cosmic_text::FeatureTag::KERNING);
+
+        let attributes = cosmic_text::Attrs::new()
+            .family(cosmic_text::Family::Monospace)
+            .font_features(features);
+
         Self {
             font_system,
             swash_cache,
@@ -85,7 +92,7 @@ impl TextRenderer {
             surface_size,
             cache: Vec::new(),
             text: String::new(),
-            attributes: cosmic_text::Attrs::new().family(cosmic_text::Family::Monospace),
+            attributes,
         }
     }
 
@@ -129,7 +136,7 @@ impl TextRenderer {
             .iter()
             .filter_map(|(placement, atlas_id)| {
                 self.atlas
-                    .get_glyph(&atlas_id.glyph_id)
+                    .get_glyph(&atlas_id.cache_key)
                     .map(|atlas_glyph| self.create_glyph_to_render(*placement, atlas_glyph))
             })
             .collect();
@@ -193,7 +200,7 @@ impl TextRenderer {
                     pos,
                     glyph.cache_key_flags,
                 );
-                let id = GlyphRectId::new(glyph.glyph_id, cache_key.0);
+                let id = GlyphRectId::new(cache_key.0);
                 swash_cache
                     .get_image_uncached(font_system, cache_key.0)
                     .map(|img| (id, Glyph::get_atlas_image(img)))
@@ -251,10 +258,8 @@ impl TextRenderer {
         let width = placement.width as f32;
         let height = placement.height as f32;
 
-        let x_offset = self.buffer.monospace_width().unwrap() - width;
-
         (
-            x_offset + x + placement.left as f32,
+            x + placement.left as f32,
             y - placement.top as f32,
             width,
             height,
@@ -262,7 +267,7 @@ impl TextRenderer {
     }
 
     fn create_atlas_id(&self, glyph_cache_key: cosmic_text::CacheKey) -> GlyphRectId {
-        GlyphRectId::new(glyph_cache_key.glyph_id, glyph_cache_key)
+        GlyphRectId::new(glyph_cache_key)
     }
 
     fn create_glyph_to_render(
