@@ -4,7 +4,6 @@ pub mod cursor;
 use bytemuck::{Pod, Zeroable};
 use cosmic_text::{Buffer, CacheKey, FontSystem, LayoutGlyph, SwashCache};
 use image::DynamicImage;
-use log::debug;
 use wgpu::{
     include_wgsl, BindGroup, BindGroupLayout, BlendState, ColorWrites, Device, Queue, RenderPass,
     RenderPipeline, SurfaceConfiguration, VertexAttribute,
