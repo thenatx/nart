@@ -230,7 +230,7 @@ impl TextRenderer {
         let width = if let Some(width) = self.buffer.monospace_width() {
             width
         } else {
-            let width = self.buffer.metrics().font_size;
+            let width = self.buffer.metrics().font_size * 0.6;
             self.buffer
                 .set_monospace_width(&mut self.font_system, Some(width));
             width

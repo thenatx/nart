@@ -35,6 +35,7 @@ impl TerminalGrid {
             .flat_map(|c| c.iter().map(|c| c.content))
             .collect();
 
+        info!("Content: '{}'", content);
         content
     }
 
@@ -46,6 +47,9 @@ impl TerminalGrid {
     pub fn update(&mut self, data: &[u8]) {
         let mut parser = Parser::new();
         let _ = parser.advance_until_terminated(self, data);
+
+        let line_len = self.cells.last().map_or(0, |line| line.len());
+        info!("cursor pos={:?}, cursor line len={}", self.cursor, line_len)
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -76,7 +80,7 @@ impl vte::Perform for TerminalGrid {
 
         let mut row = Vec::with_capacity(self.columns as usize);
         row.push(TerminalCell { content: c });
-        self.cursor.move_to(0, 0);
+        self.cursor.move_to(1, 0);
         self.cells.push(row);
     }
 
@@ -125,7 +129,7 @@ impl vte::Perform for TerminalGrid {
             }
             'J' => {
                 let value = values.get(0).unwrap_or(&0);
-                // TODO: implemnt cases for 0,1 and 2 when the implement an actual scrollback buffer
+                // TODO: implemnt cases for 0,1 and 2 when implement an actual scrollback
                 match value {
                     3 => self.cells.clear(),
                     _ => (),

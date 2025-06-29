@@ -5,9 +5,9 @@ Nart is a terminal builded in wgpu (and winit for the creation of the window) an
 Nart is in really early development, it has mostly nothing builded yet, here's the list of things that lack to reach the objetive
 
 - [x] Basic ui and shell creation
-- [x] Text rendering (even though is done already, some things render weird, probably because an error from my part using cosmic-text)
-- [x] Render a Cursor (Done but is broken)
-- [ ] ANSI/VT100/etc codes support
+- [x] Text rendering
+- [x] Render a Cursor
+- [ ] ANSI/VT100/etc codes support (Working on it)
 - [ ] Job control
 - [ ] Raw mode
 - [ ] Scrollback
