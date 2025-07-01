@@ -1,13 +1,15 @@
 struct GlyphInstance {
     @location(0) pos: vec4<f32>,
     @location(1) uv: vec4<f32>,
-    @location(2) format: f32,
+    @location(2) color: vec4<f32>,
+    @location(3) format: f32,
 };
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
-    @location(1) format: u32,
+    @location(1) color: vec4<f32>,
+    @location(2) format: u32,
 };
 
 @vertex
@@ -48,6 +50,7 @@ fn vs_main(
         mix(uv_coords.x, uv_coords.z, f32((idx & 1) != 0)),
         mix(uv_coords.y, uv_coords.w, f32((idx & 2) != 0))
     );
+    out.color = instance.color;
     out.format = u32(instance.format);
     return out;
 }
@@ -60,7 +63,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   let color = textureSample(atlas_texture, atlas_sampler, in.uv);
   switch in.format {
     case 0: {
-      return color.rrrr;
+      return vec4(in.color.rgb, color.r);
     }
     default: {
       return color;

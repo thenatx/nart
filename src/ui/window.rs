@@ -54,7 +54,7 @@ impl ApplicationHandler for Nart {
                     self.terminal.grid.update(content.as_slice());
                     let cursor_pos = self.terminal.grid.get_cursor();
 
-                    renderer.write_glyphs(&self.terminal.grid.get_content());
+                    renderer.write_content(self.terminal.grid.get_content());
                     renderer.update_cursor(
                         cursor_pos.0,
                         cursor_pos.1,

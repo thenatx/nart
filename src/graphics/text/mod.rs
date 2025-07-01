@@ -2,7 +2,7 @@ pub mod atlas;
 pub mod cursor;
 
 use bytemuck::{Pod, Zeroable};
-use cosmic_text::{Buffer, CacheKey, FontSystem, LayoutGlyph, SwashCache};
+use cosmic_text::{Buffer, CacheKey, FontSystem, LayoutGlyph, Shaping, SwashCache};
 use image::DynamicImage;
 use wgpu::{
     include_wgsl, BindGroup, BindGroupLayout, BlendState, ColorWrites, Device, Queue, RenderPass,
@@ -21,7 +21,6 @@ pub struct TextRenderer {
     cache: Vec<GlyphToRender>,
     swash_cache: SwashCache,
     attributes: cosmic_text::Attrs<'static>,
-    text: String,
     pipeline: RenderPipeline,
     atlas_bind_group_layout: BindGroupLayout,
     surface_size: (u32, u32),
@@ -49,12 +48,12 @@ impl TextRenderer {
             device.create_bind_group_layout(&GlyphAtlas::get_bind_group_layout_desc());
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Main render pipeline layout"),
+            label: Some("Text render pipeline layout"),
             bind_group_layouts: &[&atlas_bind_group_layout],
             push_constant_ranges: &[],
         });
 
-        let render_pipeline = PipelineBuilder::new(device, "Main render pipeline")
+        let render_pipeline = PipelineBuilder::new(device, "Text render pipeline")
             .with_shader(&shader_module)
             .add_color_target(
                 surface.format,
@@ -90,14 +89,13 @@ impl TextRenderer {
             pipeline: render_pipeline,
             surface_size,
             cache: Vec::new(),
-            text: String::new(),
             attributes,
         }
     }
 
     // TODO: Improve glyph positioning
     fn fill_cache(&mut self) {
-        if !self.cache.is_empty() || self.text.is_empty() {
+        if !self.cache.is_empty() || self.buffer.lines.is_empty() {
             return;
         }
 
@@ -105,7 +103,7 @@ impl TextRenderer {
             return;
         }
 
-        let mut new_cache = Vec::with_capacity(self.text.len());
+        let mut new_cache = Vec::new();
 
         for line in self.buffer.layout_runs() {
             for glyph in line.glyphs {
@@ -127,39 +125,38 @@ impl TextRenderer {
                 let glyph_placement = self.calculate_glyph_position(glyph, &line, placement);
                 let atlas_id = self.create_atlas_id(cache_key.0);
 
-                new_cache.push((glyph_placement, atlas_id));
+                let color = glyph
+                    .color_opt
+                    .unwrap_or(cosmic_text::Color::rgb(255, 255, 255));
+                new_cache.push((glyph_placement, color, atlas_id));
             }
         }
 
         self.cache = new_cache
             .iter()
-            .filter_map(|(placement, atlas_id)| {
+            .filter_map(|(placement, color, atlas_id)| {
                 self.atlas
                     .get_glyph(&atlas_id.cache_key)
-                    .map(|atlas_glyph| self.create_glyph_to_render(*placement, atlas_glyph))
+                    .map(|atlas_glyph| self.create_glyph_to_render(*placement, atlas_glyph, *color))
             })
             .collect();
     }
 
-    fn set_text(&mut self) {
-        // TODO: Improve performance here. It takes about a second or more depending on the number of glyphs.
-        // However, using a monospaced font works better.
-        self.buffer.set_text(
-            &mut self.font_system,
-            self.text.as_str(),
-            &self.attributes,
-            cosmic_text::Shaping::Advanced,
-        );
-    }
-
-    pub fn add_text(&mut self, device: &Device, queue: &Queue, text: &str) {
-        if text.is_empty() {
+    pub fn add_text(&mut self, device: &Device, queue: &Queue, content: &[StyledCharacter]) {
+        if content.is_empty() {
             return;
         }
 
-        self.text = text.to_string();
-
-        self.set_text();
+        self.buffer.set_rich_text(
+            &mut self.font_system,
+            content.iter().map(|i| {
+                let attrs = self.attributes.clone().color(i.color.into());
+                (i.character.as_str(), attrs)
+            }),
+            &self.attributes,
+            Shaping::Advanced,
+            None,
+        );
         let runs = self.buffer.layout_runs().collect::<Vec<_>>();
         let new_glyphs = Self::process_glyphs(
             runs.as_slice(),
@@ -270,6 +267,7 @@ impl TextRenderer {
         &self,
         placement: (f32, f32, f32, f32),
         atlas_glyph: &Glyph,
+        color: cosmic_text::Color,
     ) -> GlyphToRender {
         let surface_width = self.surface_size.0 as f32;
         let surface_height = self.surface_size.1 as f32;
@@ -288,7 +286,7 @@ impl TextRenderer {
             self.atlas.image.height() as f32,
         );
 
-        GlyphToRender::new(x, y, w, h, atlas_glyph, atlas_size)
+        GlyphToRender::new(x, y, w, h, atlas_glyph, atlas_size, color)
     }
 }
 
@@ -299,11 +297,20 @@ pub struct GlyphToRender {
     pos: [f32; 4],
     /// x, y, with and height of the glyph at the atlas in pixel coordinates
     atlas_uv: [f32; 4],
+    color: [f32; 4],
     format: f32,
 }
 
 impl GlyphToRender {
-    fn new(x: f32, y: f32, w: f32, h: f32, glyph: &Glyph, atlas_size: (f32, f32)) -> Self {
+    fn new(
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        glyph: &Glyph,
+        atlas_size: (f32, f32),
+        color: cosmic_text::Color,
+    ) -> Self {
         let (atlas_width, atlas_height) = atlas_size;
         let [x_uv, y_uv, w_uv, h_uv] = glyph.atlas_uv();
         let atlas_uv = [
@@ -312,6 +319,15 @@ impl GlyphToRender {
             w_uv / atlas_width,
             h_uv / atlas_height,
         ];
+
+        let color = color
+            .as_rgba()
+            .as_slice()
+            .iter()
+            .map(|&c| c as f32 / 255.0)
+            .collect::<Vec<f32>>()
+            .try_into()
+            .expect("Color should be RGBA with 4 components");
 
         let format = match glyph.format {
             atlas::GlyphImageFormat::GrayScale => 0.0,
@@ -322,10 +338,11 @@ impl GlyphToRender {
             pos: [x, y, w, h],
             atlas_uv,
             format,
+            color,
         }
     }
 
-    pub fn get_buffer_attributes(start_idx: u32) -> [VertexAttribute; 3] {
+    pub fn get_buffer_attributes(start_idx: u32) -> [VertexAttribute; 4] {
         [
             VertexAttribute {
                 format: wgpu::VertexFormat::Float32x4,
@@ -338,10 +355,26 @@ impl GlyphToRender {
                 shader_location: start_idx + 1,
             },
             VertexAttribute {
-                format: wgpu::VertexFormat::Float32,
+                format: wgpu::VertexFormat::Float32x4,
                 offset: std::mem::size_of::<[f32; 4]>() as u64 * 2,
                 shader_location: start_idx + 2,
             },
+            VertexAttribute {
+                format: wgpu::VertexFormat::Float32,
+                offset: std::mem::size_of::<[f32; 4]>() as u64 * 3,
+                shader_location: start_idx + 3,
+            },
         ]
+    }
+}
+
+pub struct StyledCharacter {
+    character: String,
+    color: crate::graphics::Color,
+}
+
+impl StyledCharacter {
+    pub fn new(character: String, color: crate::graphics::Color) -> Self {
+        Self { character, color }
     }
 }

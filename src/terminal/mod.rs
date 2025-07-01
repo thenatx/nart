@@ -16,7 +16,7 @@ impl TerminalState {
 
         Self {
             pty: Pty::new_with_shell(&defualt_shell).unwrap(),
-            grid: TerminalGrid::new(),
+            grid: TerminalGrid::default(),
         }
     }
 

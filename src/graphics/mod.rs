@@ -84,7 +84,7 @@ impl<'a> WgpuContext<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Color {
+pub struct Color {
     pub r: u8,
     pub g: u8,
     pub b: u8,
@@ -92,7 +92,7 @@ struct Color {
 }
 
 impl Color {
-    fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { r, g, b, a }
     }
 }
@@ -107,5 +107,11 @@ impl From<Color> for wgpu::Color {
         ];
 
         wgpu::Color { r, g, b, a }
+    }
+}
+
+impl From<Color> for cosmic_text::Color {
+    fn from(value: Color) -> Self {
+        cosmic_text::Color::rgb(value.r, value.g, value.b)
     }
 }

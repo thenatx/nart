@@ -1,4 +1,10 @@
-use super::{text::cursor::CursorRenderer, WgpuContext};
+use crate::terminal::grid::{TerminalCell, TerminalColor};
+
+use super::{
+    text::{cursor::CursorRenderer, StyledCharacter},
+    WgpuContext,
+};
+use log::info;
 use std::sync::Arc;
 use wgpu::{LoadOp, RenderPassColorAttachment, TextureUsages, TextureViewDescriptor};
 use winit::{dpi::PhysicalSize, window::Window};
@@ -92,9 +98,42 @@ impl Renderer {
         self.window.request_redraw();
     }
 
-    pub fn write_glyphs(&mut self, text: &str) {
-        self.text_renderer
-            .add_text(&self.context.device, &self.context.queue, text);
+    pub fn write_content(&mut self, content: &Vec<Vec<TerminalCell>>) {
+        let content = content
+            .iter()
+            .flatten()
+            .map(|i| {
+                let color = match i.style.foreground {
+                    TerminalColor::Black => super::Color::new(0, 0, 0, 255),
+                    TerminalColor::Red => super::Color::new(255, 0, 0, 255),
+                    TerminalColor::Green => super::Color::new(0, 255, 0, 255),
+                    TerminalColor::Yellow => super::Color::new(255, 255, 0, 255),
+                    TerminalColor::Blue => super::Color::new(0, 0, 255, 255),
+                    TerminalColor::Magenta => super::Color::new(255, 0, 255, 255),
+                    TerminalColor::Cyan => super::Color::new(0, 255, 255, 255),
+                    TerminalColor::White => super::Color::new(255, 255, 255, 255),
+                    TerminalColor::BrightBlack => super::Color::new(100, 100, 100, 255),
+                    TerminalColor::BrightRed => super::Color::new(255, 100, 100, 255),
+                    TerminalColor::BrightGreen => super::Color::new(100, 255, 100, 255),
+                    TerminalColor::BrightYellow => super::Color::new(255, 255, 100, 255),
+                    TerminalColor::BrightBlue => super::Color::new(100, 100, 255, 255),
+                    TerminalColor::BrightMagenta => super::Color::new(255, 100, 255, 255),
+                    TerminalColor::BrightCyan => super::Color::new(100, 255, 255, 255),
+                    TerminalColor::BrightWhite => super::Color::new(255, 255, 255, 255),
+                    TerminalColor::Rgb(r, g, b) => {
+                        info!("Truecolor: {:?}", (r, g, b));
+                        super::Color::new(r, g, b, 255)
+                    }
+                };
+
+                StyledCharacter::new(i.content.to_string(), color)
+            })
+            .collect::<Vec<StyledCharacter>>();
+        self.text_renderer.add_text(
+            &self.context.device,
+            &self.context.queue,
+            content.as_slice(),
+        );
     }
 
     pub fn get_cell_size(&mut self) -> (f32, f32) {
