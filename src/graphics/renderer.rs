@@ -4,7 +4,6 @@ use super::{
     text::{cursor::CursorRenderer, StyledCharacter},
     WgpuContext,
 };
-use log::info;
 use std::sync::Arc;
 use wgpu::{LoadOp, RenderPassColorAttachment, TextureUsages, TextureViewDescriptor};
 use winit::{dpi::PhysicalSize, window::Window};
@@ -120,10 +119,7 @@ impl Renderer {
                     TerminalColor::BrightMagenta => super::Color::new(255, 100, 255, 255),
                     TerminalColor::BrightCyan => super::Color::new(100, 255, 255, 255),
                     TerminalColor::BrightWhite => super::Color::new(255, 255, 255, 255),
-                    TerminalColor::Rgb(r, g, b) => {
-                        info!("Truecolor: {:?}", (r, g, b));
-                        super::Color::new(r, g, b, 255)
-                    }
+                    TerminalColor::Rgb(r, g, b) => super::Color::new(r, g, b, 255),
                 };
 
                 StyledCharacter::new(i.content.to_string(), color)
