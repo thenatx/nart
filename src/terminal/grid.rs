@@ -1,6 +1,5 @@
 use std::{collections::HashMap, u8};
 
-use log::info;
 use vte::Parser;
 
 #[derive(Debug, Default)]
@@ -71,7 +70,7 @@ impl vte::Perform for TerminalGrid {
     fn csi_dispatch(
         &mut self,
         params: &vte::Params,
-        intermediates: &[u8],
+        _intermediates: &[u8],
         _ignore: bool,
         action: char,
     ) {
