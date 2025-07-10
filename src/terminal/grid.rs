@@ -5,13 +5,13 @@ use vte::Parser;
 
 #[derive(Debug, Default)]
 pub struct TerminalGrid {
-    rows: u32,
-    columns: u32,
+    pub rows: u32,
+    pub columns: u32,
+    pub cell_size: (f32, f32),
     cells: Vec<Vec<TerminalCell>>,
     cursor: TerminalCursor,
     width: u32,
     height: u32,
-    pub cell_size: (f32, f32),
     current_style: TerminalStyle,
 }
 
@@ -110,9 +110,20 @@ impl vte::Perform for TerminalGrid {
             }
             'J' => {
                 let value = params.get(0).unwrap_or(&0);
-                // TODO: implemnt cases for 0,1 and 2 when implement an actual scrollback
                 match value {
-                    3 => self.cells.clear(),
+                    0 => {
+                        self.cells.truncate(self.cursor.1 as usize);
+                        if let Some(line) = self.cells.get_mut(self.cursor.1 as usize) {
+                            line.truncate(self.cursor.0 as usize);
+                        }
+                    }
+                    1 => {
+                        self.cells.drain(self.cursor.1 as usize..);
+                        if let Some(line) = self.cells.get_mut(self.cursor.1 as usize) {
+                            line.drain(self.cursor.0 as usize..);
+                        }
+                    }
+                    2 | 3 => self.cells.clear(),
                     _ => (),
                 }
             }
@@ -121,19 +132,10 @@ impl vte::Perform for TerminalGrid {
                 if let Some(line) = self.cells.get_mut(self.cursor.1 as usize) {
                     match value {
                         0 => {
-                            let mut updated_line =
-                                line.get(0..self.cursor.0 as usize).unwrap_or(&[]).to_vec();
-                            line.clear();
-                            line.append(&mut updated_line);
+                            line.truncate(self.cursor.0 as usize);
                         }
                         1 => {
-                            let mut updated_line = line
-                                .get(self.cursor.0 as usize..line.len())
-                                .unwrap_or(&[])
-                                .to_vec();
-
-                            line.clear();
-                            line.append(&mut updated_line);
+                            line.drain(self.cursor.0 as usize..);
                         }
                         2 => line.clear(),
                         _ => (),
@@ -239,23 +241,28 @@ impl vte::Perform for TerminalGrid {
             }
             _ => (),
         };
-
-        info!(
-            "Params={:?}, Action={:?}, intermediates={:?}",
-            params, action, intermediates
-        );
     }
 
     fn execute(&mut self, byte: u8) {
         match byte {
-            10 => {
+            0x08 => {
+                if self.cursor.0 > 0 {
+                    self.cursor.move_left(1);
+                } else if self.cursor.1 > 0 {
+                    self.cursor.move_to(self.columns - 1, self.cursor.1 - 1);
+                }
+            }
+            0x0A => {
                 if let Some(row) = self.cells.last_mut() {
-                    self.cursor.move_to(0, self.cursor.1 + 1);
+                    self.cursor.move_down(1);
                     row.push(TerminalCell {
                         content: '\n',
                         style: self.current_style,
                     });
                 }
+            }
+            0x0D => {
+                self.cursor.move_to(0, self.cursor.1);
             }
             _ => (),
         }
