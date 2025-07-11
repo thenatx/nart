@@ -42,29 +42,48 @@ impl TerminalGrid {
     }
 }
 
+fn horizontal_absolute_char_write(
+    line: &mut Vec<TerminalCell>,
+    style: TerminalStyle,
+    x: usize,
+    c: char,
+) {
+    for _ in line.len()..x + 1 {
+        line.push(TerminalCell {
+            content: ' ',
+            style: TerminalStyle::default(),
+        });
+    }
+
+    if let Some(cell) = line.get_mut(x) {
+        cell.content = c;
+        cell.style = style;
+        return;
+    }
+
+    unreachable!()
+}
+
 impl vte::Perform for TerminalGrid {
     fn print(&mut self, c: char) {
-        if let Some(row) = self.cells.last_mut() {
-            row.push(TerminalCell {
-                content: c,
-                style: self.current_style,
-            });
+        if let Some(row) = self.cells.get_mut(self.cursor.1 as usize) {
+            horizontal_absolute_char_write(row, self.current_style, self.cursor.0 as usize, c);
             self.cursor.move_right(1);
-
-            if self.cursor.0 >= self.columns {
-                self.cursor.move_to(0, self.cursor.1 + 1);
-            }
-
             return;
         }
 
-        let mut row = Vec::with_capacity(self.columns as usize);
-        row.push(TerminalCell {
-            content: c,
-            style: self.current_style,
-        });
-        self.cursor.move_to(1, 0);
-        self.cells.push(row);
+        for _ in self.cells.len()..self.cursor.1 as usize + 1 {
+            let row = Vec::with_capacity(self.columns as usize);
+            self.cells.push(row);
+        }
+
+        if let Some(line) = self.cells.get_mut(self.cursor.1 as usize) {
+            horizontal_absolute_char_write(line, self.current_style, self.cursor.0 as usize, c);
+            self.cursor.move_right(1);
+            return;
+        }
+
+        unreachable!()
     }
 
     fn csi_dispatch(
@@ -98,7 +117,7 @@ impl vte::Perform for TerminalGrid {
             }
             'G' => {
                 let value = *params.get(0).unwrap_or(&0) as u32;
-                self.cursor.move_to(value, self.cursor.0)
+                self.cursor.move_to(value, self.cursor.1)
             }
 
             'H' | 'f' => {
