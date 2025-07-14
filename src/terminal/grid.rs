@@ -94,11 +94,17 @@ impl vte::Perform for TerminalGrid {
         action: char,
     ) {
         let params = params.iter().flatten().copied().collect::<Vec<_>>();
+        let eight_bit_color_table = {
+            let mut table = HashMap::new();
+            fill_color_table(&mut table);
+
+            table
+        };
 
         // TODO: Refactor this, looks really bad and still are ansi codes without being handled properly
         match action {
             'A' | 'B' | 'C' | 'D' => {
-                let distance = *params.get(0).unwrap_or(&0) as u32;
+                let distance = *params.get(0).unwrap_or(&1) as u32;
                 match action {
                     'A' => self.cursor.move_up(distance),
                     'B' => self.cursor.move_down(distance),
@@ -109,11 +115,11 @@ impl vte::Perform for TerminalGrid {
             }
             'E' => {
                 let value = *params.get(0).unwrap_or(&1) as u32;
-                self.cursor.move_to(0, self.cursor.0 + value)
+                self.cursor.move_to(0, self.cursor.1 + value)
             }
             'F' => {
                 let value = *params.get(0).unwrap_or(&1) as u32;
-                self.cursor.move_to(0, self.cursor.0 - value)
+                self.cursor.move_to(0, self.cursor.1 - value)
             }
             'G' => {
                 let value = *params.get(0).unwrap_or(&0) as u32;
@@ -162,16 +168,11 @@ impl vte::Perform for TerminalGrid {
             }
 
             'm' => {
-                let eight_bit_color_table = {
-                    let mut table = HashMap::new();
-                    fill_color_table(&mut table);
-
-                    table
-                };
-
                 let mut i = 0;
-                while i < params.len() {
-                    let param = params[i];
+                while i <= params.len() {
+                    let Some(param) = params.get(i) else {
+                        return;
+                    };
                     self.current_style.foreground = match param {
                         0 => TerminalColor::White,
                         30 => TerminalColor::Black,
@@ -298,11 +299,11 @@ struct TerminalCursor(u32, u32);
 
 impl TerminalCursor {
     fn move_up(&mut self, y: u32) {
-        if self.1 == 0 {
-            return;
+        if self.1 >= y - 1 {
+            self.1 = self.1 - y;
+        } else {
+            self.1 = 0;
         }
-
-        self.1 = self.1 - y
     }
 
     fn move_down(&mut self, y: u32) {
@@ -310,11 +311,11 @@ impl TerminalCursor {
     }
 
     fn move_left(&mut self, x: u32) {
-        if self.0 == 0 {
-            return;
+        if self.0 >= x {
+            self.0 = self.0 - x;
+        } else {
+            self.0 = 0;
         }
-
-        self.0 = self.0 - x
     }
 
     fn move_right(&mut self, x: u32) {
