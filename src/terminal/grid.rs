@@ -1,5 +1,6 @@
 use std::{collections::HashMap, u8};
 
+use log::info;
 use vte::Parser;
 
 #[derive(Debug, Default)]
@@ -66,6 +67,8 @@ fn horizontal_absolute_char_write(
 
 impl vte::Perform for TerminalGrid {
     fn print(&mut self, c: char) {
+        log::info!("print {c}");
+
         if let Some(row) = self.cells.get_mut(self.cursor.1 as usize) {
             horizontal_absolute_char_write(row, self.current_style, self.cursor.0 as usize, c);
             self.cursor.move_right(1);
@@ -93,6 +96,10 @@ impl vte::Perform for TerminalGrid {
         _ignore: bool,
         action: char,
     ) {
+        if action != 'm' {
+            log::info!("{} {:?}", action, params);
+        }
+
         let params = params.iter().flatten().copied().collect::<Vec<_>>();
         let eight_bit_color_table = {
             let mut table = HashMap::new();
@@ -299,7 +306,7 @@ struct TerminalCursor(u32, u32);
 
 impl TerminalCursor {
     fn move_up(&mut self, y: u32) {
-        if self.1 >= y - 1 {
+        if self.1 >= y {
             self.1 = self.1 - y;
         } else {
             self.1 = 0;
