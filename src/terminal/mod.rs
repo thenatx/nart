@@ -1,3 +1,5 @@
+use std::os::fd::AsRawFd;
+
 use grid::TerminalGrid;
 use nix::{errno::Errno, unistd};
 use pty::Pty;
@@ -13,11 +15,10 @@ pub struct TerminalState {
 impl TerminalState {
     pub fn new() -> Self {
         let defualt_shell = std::env::var("SHELL").unwrap();
+        let pty = Pty::new_with_shell(&defualt_shell).unwrap();
+        let grid = TerminalGrid::new(pty.master.as_raw_fd());
 
-        Self {
-            pty: Pty::new_with_shell(&defualt_shell).unwrap(),
-            grid: TerminalGrid::default(),
-        }
+        Self { pty, grid }
     }
 
     pub fn write_content(&mut self, buf: &str) {

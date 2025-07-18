@@ -1,9 +1,8 @@
-use std::{collections::HashMap, u8};
+use std::{collections::HashMap, os::fd::RawFd};
 
-use log::info;
 use vte::Parser;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TerminalGrid {
     pub rows: u32,
     pub columns: u32,
@@ -13,9 +12,24 @@ pub struct TerminalGrid {
     width: u32,
     height: u32,
     current_style: TerminalStyle,
+    fd: RawFd,
 }
 
 impl TerminalGrid {
+    pub fn new(fd: RawFd) -> Self {
+        Self {
+            fd,
+            width: 0,
+            height: 0,
+            rows: 0,
+            columns: 0,
+            cells: Vec::new(),
+            cell_size: (0.0, 0.0),
+            cursor: TerminalCursor(0, 0),
+            current_style: TerminalStyle::default(),
+        }
+    }
+
     pub fn get_content(&self) -> &Vec<Vec<TerminalCell>> {
         &self.cells
     }
@@ -37,6 +51,22 @@ impl TerminalGrid {
             self.width as f32 / self.cell_size.0,
             self.height as f32 / self.cell_size.1,
         );
+
+        nix::ioctl_write_int_bad!(tiocswinsz, nix::libc::TIOCSWINSZ);
+
+        let winsize = nix::pty::Winsize {
+            ws_row: self.rows as u16,
+            ws_col: self.columns as u16,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+
+        let winsize_ptr: *const nix::pty::Winsize = &winsize;
+        unsafe {
+            // Maybe i can handle this different from a panic?
+            tiocswinsz(self.fd, winsize_ptr as std::os::raw::c_int)
+                .unwrap_or_else(|e| panic!("Failed to resize the terminal, error: {e:?}"));
+        }
 
         self.rows = rows as u32;
         self.columns = columns as u32;
@@ -67,8 +97,6 @@ fn horizontal_absolute_char_write(
 
 impl vte::Perform for TerminalGrid {
     fn print(&mut self, c: char) {
-        log::info!("print {c}");
-
         if let Some(row) = self.cells.get_mut(self.cursor.1 as usize) {
             horizontal_absolute_char_write(row, self.current_style, self.cursor.0 as usize, c);
             self.cursor.move_right(1);
